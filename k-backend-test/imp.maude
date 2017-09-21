@@ -1,0 +1,86 @@
+mod IMP-SYNTAX is
+  protecting INT * (op _+_ : Int Int -> Int to _+Int_) .
+  sorts Var Exp Stmt .
+---  subsorts Var Int < Exp .
+  op var : Var -> Exp .
+  op int : Int -> Exp .
+  op _+_ : Exp Exp -> Exp .
+  op _=_; : Var Exp -> Stmt .
+  op __ : Stmt Stmt -> Stmt .
+  op while(_)_ : Exp Stmt -> Stmt .
+  op if(_)_else_ : Exp Stmt Stmt -> Stmt .
+  op skip : -> Stmt .
+
+  ops n s : -> Var .
+  op sum : -> Stmt .
+  eq sum = while(var(n)) (s = var(s) + var(n) ; n = var(n) + int(-1) ;) .
+endm
+
+
+mod K-STUFF is
+  protecting IMP-SYNTAX .
+
+  sorts KItem K .
+  op _~>_ : KItem K -> K .
+  op .K : -> K .
+
+  sorts Binding State .
+  subsort Binding < State .
+  op .State : -> State .
+  op _|->_ : Var Int -> Binding [prec 0] .
+  op _,_ : State State -> State [assoc comm id: .State] .
+
+  sorts KCell StateCell CfgCell .
+  op k : K -> KCell .
+  op state : State -> StateCell .
+  op cfg : KCell StateCell -> CfgCell .
+
+  subsorts Exp Stmt < KItem .
+
+  var S : Stmt .  var I : Int .
+  op krun : Stmt Int -> CfgCell .
+  eq krun(S,I) = cfg(k(S ~> .K), state(s |-> 0, n |-> I)) .
+
+endm
+
+
+mod IMP is
+  protecting K-STUFF .
+  var X : Var .  vars E E1 E2 : Exp .  vars I J I1 I2 : Int .  vars S S1 S2 : Stmt .
+  var Rest : K .  var M : State .  var SC : StateCell .
+
+  op [] + _ : Exp -> KItem .
+  op _ + [] : Exp -> KItem .
+  eq k(int(I1) + int(I2) ~> Rest) = k(int(I1 +Int I2) ~> Rest) .
+  eq k(int(I1) + E2 ~> Rest) = k(E2 ~> int(I1) + [] ~> Rest) [owise] .
+  eq k(int(I2) ~> E1 + [] ~> Rest) = k(E1 + int(I2) ~> Rest) .
+  eq k(E1 + E2 ~> Rest) = k(E1 ~> [] + E2 ~> Rest) [owise] .
+  eq k(int(I1) ~> [] + E2 ~> Rest) = k(int(I1) + E2 ~> Rest) .
+
+
+  op if([])_else_ : Stmt Stmt -> KItem .
+  eq k(if(int(I)) S1 else S2 ~> Rest) = k(if (I == 0) then S2 else S1 fi ~> Rest) .
+  eq k(if (E) S1 else S2 ~> Rest) = k(E ~> if([]) S1 else S2 ~> Rest) [owise] .
+  eq k(int(I) ~> if([]) S1 else S2 ~> Rest) = k(if(int(I)) S1 else S2 ~> Rest) .
+
+  op _ = [] ; : Var -> KItem .
+  eq cfg(k(X = int(I) ; ~> Rest), state(X |-> J, M))
+   = cfg(k(                Rest), state(X |-> I, M)) .
+  eq cfg(k(X = E ; ~> Rest), SC)
+   = cfg(k(E ~> X = [] ; ~> Rest), SC) [owise] .
+  eq k(int(I) ~> X = [] ; ~> Rest) = k(X = int(I) ; ~> Rest) .
+
+  eq k(while(E)S ~> Rest) = k(if(E)(S while(E)S) else skip ~> Rest) .
+  eq k(skip ~> Rest) = k(Rest) .
+  eq k(S1 S2 ~> Rest) = k(S1 ~> S2 ~> Rest) .
+
+  eq cfg(k(var(X) ~> Rest), state(X |-> I, M)) =
+     cfg(k(int(I) ~> Rest), state(X |-> I, M)) .
+
+endm
+
+red krun(sum, 100000) .
+red krun(sum, 1000000) .
+red krun(sum, 50000000) .
+
+q
