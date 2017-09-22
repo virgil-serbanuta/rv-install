@@ -1,9 +1,8 @@
 package com.runtimeverification.ktest.nonterminals;
 
 import com.runtimeverification.ktest.KThing;
-import com.runtimeverification.ktest.rule.ValueRuleTerm;
 
-public class Int implements KThing<Int> {
+public class Int implements KThing {
     private final int value;
 
     private Int(int value) {
@@ -20,5 +19,10 @@ public class Int implements KThing<Int> {
 
     public static Int of(int value) {
         return new Int(value);
+    }
+
+    @Override
+    public String toString() {
+        return "Int(" + value + ")";
     }
 }

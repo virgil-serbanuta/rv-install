@@ -7,12 +7,39 @@ public abstract class Bexp implements KThing {
         return new LessBexp(first, second);
     }
 
+    public static Bexp and(Bexp first, Bexp second) {
+        return new AndBexp(first, second);
+    }
+
     public static Bexp not(Bexp operand) {
         return new NotBexp(operand);
     }
 
     public static Bexp bool(Bool value) {
         return new BoolBexp(value);
+    }
+
+    public static class AndBexp extends Bexp {
+        private final Bexp first;
+        private final Bexp second;
+
+        private AndBexp(Bexp first, Bexp second) {
+            this.first = first;
+            this.second = second;
+        }
+
+        public Bexp getFirst() {
+            return first;
+        }
+
+        public Bexp getSecond() {
+            return second;
+        }
+
+        @Override
+        public String toString() {
+            return "AndBexp(" + first.toString() + ", " + second.toString() + ")";
+        }
     }
 
     public static class NotBexp extends Bexp {
@@ -24,6 +51,11 @@ public abstract class Bexp implements KThing {
 
         public Bexp getOperand() {
             return operand;
+        }
+
+        @Override
+        public String toString() {
+            return "NotBexp(" + operand.toString() + ")";
         }
     }
 
@@ -43,6 +75,11 @@ public abstract class Bexp implements KThing {
         public Aexp getSecond() {
             return second;
         }
+
+        @Override
+        public String toString() {
+            return "LessBexp(" + first.toString() + ", " + second.toString() + ")";
+        }
     }
 
     public static class BoolBexp extends Bexp {
@@ -54,6 +91,11 @@ public abstract class Bexp implements KThing {
 
         public Bool getBool() {
             return value;
+        }
+
+        @Override
+        public String toString() {
+            return "BoolBexp(" + value.toString() + ")";
         }
     }
 }

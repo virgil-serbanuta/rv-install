@@ -2,7 +2,7 @@ package com.runtimeverification.ktest.nonterminals;
 
 import com.runtimeverification.ktest.KThing;
 
-public class Id implements KThing<Id> {
+public class Id implements KThing {
     private final String identifier;
 
     private Id(String identifier) {
@@ -14,7 +14,17 @@ public class Id implements KThing<Id> {
     }
 
     @Override
-    public Id get() {
-        return this;
+    public String toString() {
+        return "Id(" + identifier + ")";
+    }
+
+    @Override
+    public int hashCode() {
+        return identifier.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj instanceof Id && identifier.equals(((Id) obj).identifier);
     }
 }

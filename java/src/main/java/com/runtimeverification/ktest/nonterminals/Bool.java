@@ -1,9 +1,8 @@
 package com.runtimeverification.ktest.nonterminals;
 
 import com.runtimeverification.ktest.KThing;
-import com.runtimeverification.ktest.rule.RuleTerm;
 
-public class Bool implements KThing<Bool> {
+public class Bool implements KThing {
     private final boolean value;
 
     private Bool(boolean value) {
@@ -20,5 +19,10 @@ public class Bool implements KThing<Bool> {
 
     public boolean getValue() {
         return value;
+    }
+
+    @Override
+    public String toString() {
+        return "Bool(" + value + ")";
     }
 }

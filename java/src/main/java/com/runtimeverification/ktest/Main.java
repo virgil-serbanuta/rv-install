@@ -10,61 +10,135 @@ import com.runtimeverification.ktest.nonterminals.Id;
 import com.runtimeverification.ktest.nonterminals.Ids;
 import com.runtimeverification.ktest.nonterminals.Int;
 import com.runtimeverification.ktest.nonterminals.KItem;
-import com.runtimeverification.ktest.nonterminals.KResult;
 import com.runtimeverification.ktest.nonterminals.Pgm;
 import com.runtimeverification.ktest.nonterminals.Stmt;
-import com.runtimeverification.ktest.rule.operations.Operation;
-import com.runtimeverification.ktest.rule.ruleterms.Anything;
-import com.runtimeverification.ktest.rule.ruleterms.MappingTerm;
-import com.runtimeverification.ktest.rule.RuleCell;
-import com.runtimeverification.ktest.rule.RuleFlags;
-import com.runtimeverification.ktest.rule.RuleTerm;
-import com.runtimeverification.ktest.rule.ruleterms.Sequence;
-import com.runtimeverification.ktest.rule.ruleterms.Terminal;
-import com.runtimeverification.ktest.rule.ruleterms.Transform;
-import com.runtimeverification.ktest.rule.ruleterms.Variable;
-import com.runtimeverification.ktest.rule.operations.BoolAnd;
-import com.runtimeverification.ktest.rule.operations.BoolNot;
-import com.runtimeverification.ktest.rule.operations.IntAddition;
-import com.runtimeverification.ktest.rule.operations.IntDivision;
-import com.runtimeverification.ktest.rule.operations.IntLessOrEquals;
-import com.runtimeverification.ktest.rule.operations.IntNotEquals;
 import com.runtimeverification.ktest.tools.KMap;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public class Main {
     public static void main(String[] args) {
-        KThing pgm = loadProgram(args);
-        Configuration initialConfiguration = Configuration.of(
-                Cell.of("k", pgm, Attribute.of("color", "green")),
-                Cell.of("state", new KMap(), Attribute.of("color", "red")),
-                Cell.of("exit-code", Int.of("0"), Attribute.of("exit", "true")));
-        List<Rule> rules = impRules();
-        System.out.println(Runner.run(initialConfiguration, rules));
+        KThing pgm = loadProgram();
+        Configuration initialConfiguration = new Configuration()
+                .replaceKCell(Cell.of("k", pgm, Attribute.of("color", "green")))
+                .replaceStateCell(Cell.of("state", new KMap(), Attribute.of("color", "red")));
+        List<Rule> rules = loadRules();
+        System.out.println(run(initialConfiguration, rules));
     }
 
-    private static Optional<Configuration> step(Configuration configuration) {
+    private static Configuration run(Configuration current, List<Rule> rules) {
+        while(true) {
+            Optional<Configuration> next = step(current, rules);
+            if (!next.isPresent()) {
+                return current;
+            }
+            current = next.get();
+        }
+    }
+
+    private static Optional<Configuration> step(Configuration configuration, List<Rule> rules) {
         if (configuration.getK().getTermCount() == 0) {
             return Optional.empty();
         }
         final KThing firstKCellItem = configuration.getK().getTerm(0);
+        Optional<KThing> secondKCellItem = Optional.empty();
+        if (configuration.getK().getTermCount() > 1) {
+            secondKCellItem = Optional.of(configuration.getK().getTerm(1));
+        }
 
         assert configuration.getState().getTermCount() == 1;
         final KThing stateCellItem = configuration.getState().getTerm(0);
         assert stateCellItem instanceof KMap;
-        final KMap stateCellMap = (KMap)stateCellItem;
+        final KMap stateCellMap = (KMap) stateCellItem;
 
-        {
-            KThing value = stateCellMap.getMap().get(firstKCellItem);
-            if (value != null) {
-                return Optional.of(configuration.replaceKCell(
-                        configuration.getK().replacePrefix(1, value)));
+        for (Rule rule : rules) {
+            Optional<Configuration> next = rule.apply(configuration, firstKCellItem, secondKCellItem, stateCellMap);
+            if (next.isPresent()) {
+                return next;
             }
         }
-        {
+        return Optional.empty();
+    }
+
+    private static List<Rule> loadRules() {
+        List<Rule> rules = new ArrayList<>();
+
+        // Structural
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Block.EmptyBlock) {
+                return Optional.of(configuration.replaceKCell(configuration.getK().removePrefix(1)));
+            }
+            return Optional.empty();
+        });
+        // Structural
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Block.StmtBlock) {
+                Block.StmtBlock block = (Block.StmtBlock) firstKCellItem;
+                return Optional.of(configuration.replaceKCell(
+                        configuration.getK().replacePrefix(1, block.getStmt())));
+            }
+            return Optional.empty();
+        });
+        // Structural
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Stmt.BlockStmt) {
+                Stmt.BlockStmt block = (Stmt.BlockStmt) firstKCellItem;
+                return Optional.of(configuration.replaceKCell(
+                        configuration.getK().replacePrefix(1, block.getBlock())));
+            }
+            return Optional.empty();
+        });
+        //Structural
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Stmt.SequenceStmt) {
+                Stmt.SequenceStmt sequenceStmt = (Stmt.SequenceStmt) firstKCellItem;
+                return Optional.of(configuration.replaceKCell(
+                        configuration.getK().replacePrefix(
+                                1, sequenceStmt.getFirst(), sequenceStmt.getSecond())));
+            }
+            return Optional.empty();
+        });
+        // Structural
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Stmt.WhileStmt) {
+                Stmt.WhileStmt whileStmt = (Stmt.WhileStmt) firstKCellItem;
+                return Optional.of(configuration.replaceKCell(
+                        configuration.getK().replacePrefix(
+                                1,
+                                Stmt.sif(
+                                        whileStmt.getCondition(),
+                                        Block.stmt(Stmt.sequence(Stmt.block(whileStmt.getBlock()), whileStmt)),
+                                        Block.empty()))));
+            }
+            return Optional.empty();
+        });
+        // Structural
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Pgm) {
+                Pgm pgm = (Pgm) firstKCellItem;
+                if (pgm.getIds() instanceof Ids.Empty) {
+                    return Optional.of(
+                            configuration.replaceKCell(configuration.getK().replacePrefix(1, pgm.getStmt())));
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.IdAexp) {
+                Aexp.IdAexp id = (Aexp.IdAexp) firstKCellItem;
+                KThing value = stateCellMap.getMap().get(id.getId());
+                if (value != null) {
+                    return Optional.of(configuration.replaceKCell(
+                            configuration.getK().replacePrefix(1, value)));
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
             if (firstKCellItem instanceof Aexp.DivAexp) {
                 Aexp.DivAexp div = (Aexp.DivAexp) firstKCellItem;
                 if ((div.getFirst() instanceof Aexp.IntAexp) && (div.getSecond() instanceof Aexp.IntAexp)) {
@@ -78,8 +152,9 @@ public class Main {
                     }
                 }
             }
-        }
-        {
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
             if (firstKCellItem instanceof Aexp.AddAexp) {
                 Aexp.AddAexp add = (Aexp.AddAexp) firstKCellItem;
                 if ((add.getFirst() instanceof Aexp.IntAexp) && (add.getSecond() instanceof Aexp.IntAexp)) {
@@ -90,8 +165,9 @@ public class Main {
                                     first.getInt().getValue() + second.getInt().getValue())))));
                 }
             }
-        }
-        {
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
             if (firstKCellItem instanceof Bexp.LessBexp) {
                 Bexp.LessBexp lessOrEquals = (Bexp.LessBexp) firstKCellItem;
                 if ((lessOrEquals.getFirst() instanceof Aexp.IntAexp) && (lessOrEquals.getSecond() instanceof Aexp.IntAexp)) {
@@ -102,8 +178,9 @@ public class Main {
                                     first.getInt().getValue() <= second.getInt().getValue())))));
                 }
             }
-        }
-        {
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
             if (firstKCellItem instanceof Bexp.NotBexp) {
                 Bexp.NotBexp not = (Bexp.NotBexp) firstKCellItem;
                 if ((not.getOperand() instanceof Bexp.BoolBexp)) {
@@ -113,356 +190,322 @@ public class Main {
                                     !operand.getBool().getValue())))));
                 }
             }
-        }
-        return Arrays.asList(
-                Rule.of(
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Terminal.of("true"), Terminal.of("&&"), Variable.of("B")),
-                                        Resolver.of("B", KThing.class)),
-                                Anything.of()),
-                        RuleCell.of("state", Anything.of())
-                ),
-                Rule.of(
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Terminal.of("false"), Terminal.of("&&"), Variable.of("B")),
-                                        Bool.of("false")),
-                                Anything.of()),
-                        RuleCell.of("state", Anything.of())
-                ),
-                Rule.of(
-                        RuleFlags.of(RuleFlags.Type.STRUCTURAL),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Terminal.of("{"), Terminal.of("}")),
-                                        KThingSource.empty()),
-                                Anything.of()),
-                        RuleCell.of("state", Anything.of())
-                ),
-                Rule.of(
-                        RuleFlags.of(RuleFlags.Type.STRUCTURAL),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Terminal.of("{"), Variable.of("S"), Terminal.of("}")),
-                                        Resolver.of("S", KThing.class)),
-                                Anything.of()),
-                        RuleCell.of("state", Anything.of())
-                ),
-                Rule.of(
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Variable.of("X"), Terminal.of("="), Variable.of("I", Int.class)),
-                                        KThingSource.empty()),
-                                Anything.of()),
-                        RuleCell.of("state",
-                                Anything.of(),
-                                MappingTerm.of(
-                                        Resolver.of("X", KThing.class),
-                                        Transform.of(Variable.ignored(), Resolver.of("I", KThing.class))))
-                ),
-                Rule.of(
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Variable.of("S1", Stmt.class), Variable.of("S2", Stmt.class)),
-                                        Resolver.of("S1", KThing.class),
-                                        Resolver.of("S2", KThing.class)),
-                                Anything.of()),
-                        RuleCell.of("state", Variable.ignored())
-                ),
-                Rule.of(
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(
-                                                Terminal.of("if"), Terminal.of("("), Terminal.of("true"),
-                                                Terminal.of(")"), Variable.of("S"), Terminal.of("else"),
-                                                Variable.ignored()),
-                                        Resolver.of("S", KThing.class)),
-                                Anything.of()),
-                        RuleCell.of("state", Variable.ignored())
-                ),
-                Rule.of(
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(
-                                                Terminal.of("if"), Terminal.of("("), Terminal.of("false"), Terminal.of(")"),
-                                                Variable.ignored(), Terminal.of("else"), Variable.of("S")),
-                                        Resolver.of("S", KThing.class)),
-                                Anything.of()),
-                        RuleCell.of("state", Variable.ignored())
-                ),
-                Rule.of(
-                        RuleFlags.of(RuleFlags.Type.STRUCTURAL),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(
-                                                Terminal.of("while"), Terminal.of("("), Variable.of("B"),
-                                                Terminal.of(")"), Variable.of("S")),
-                                        Stmt.sif(
-                                                Resolver.of("B", Bexp.class),
-                                                Block.stmt(Stmt.sequence(
-                                                        Stmt.block(Resolver.of("S", Block.class)),
-                                                        Stmt.swhile(
-                                                                Resolver.of("B", Bexp.class),
-                                                                Resolver.of("S", Block.class)))),
-                                                Block.empty())),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCell.of(
-                                "k",
-                                Sequence.of(
-                                        Terminal.of("int"),
-                                        Transform.of(
-                                                Sequence.of(
-                                                        Variable.of("X"),
-                                                        Terminal.of(","),
-                                                        Variable.of("Xs")),
-                                                Resolver.of("Xs", KThing.class))),
-                                Anything.of()),
-                        RuleCell.of(
-                                "state",
-                                MappingTerm.of(
-                                        Resolver.of("X", KThing.class),
-                                        Transform.of(Variable.ignored(), Resolver.of("I", KThing.class))))
-                ),
-                Rule.of(
-                        RuleFlags.of(RuleFlags.Type.STRUCTURAL),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(
-                                                Terminal.of("int"),
-                                                Builtins.empty(Ids.class),
-                                                Terminal.of(";"),
-                                                Variable.of("S")),
-                                        Resolver.of("S", KThing.class)))
-                ),
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Bexp.AndBexp) {
+                Bexp.AndBexp band = (Bexp.AndBexp) firstKCellItem;
+                if ((band.getFirst() instanceof Bexp.BoolBexp)) {
+                    Bexp.BoolBexp first = (Bexp.BoolBexp) band.getFirst();
+                    if (first.getBool().getValue()) {
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(1, band.getSecond())));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Bexp.AndBexp) {
+                Bexp.AndBexp band = (Bexp.AndBexp) firstKCellItem;
+                if ((band.getFirst() instanceof Bexp.BoolBexp)) {
+                    Bexp.BoolBexp first = (Bexp.BoolBexp) band.getFirst();
+                    if (!first.getBool().getValue()) {
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(1, first)));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
 
-                Rule.of(
-                        RuleCondition.of(BoolNot.of(Builtins.is(KResult.class, Resolver.of("E1", KThing.class)))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Variable.of("E1"), Terminal.of("/"), Variable.of("E2")),
-                                        Resolver.of("E1", KThing.class),
-                                        KItem.divisionLeftMissing(Resolver.of("E2", Aexp.class))),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(Builtins.is(KResult.class, Resolver.of("R", KThing.class))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Arrays.asList(
-                                                Variable.of("R"),
-                                                Sequence.of(Terminal.of("[]"), Terminal.of("/"), Variable.of("E2"))),
-                                        Aexp.div(Resolver.of("R", Aexp.class), Resolver.of("E2", Aexp.class))),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(
-                                BoolAnd.of(
-                                        Builtins.is(KResult.class, Resolver.of("E1", KThing.class)),
-                                        BoolNot.of(Builtins.is(KResult.class, Resolver.of("E2", KThing.class))))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Variable.of("E1"), Terminal.of("/"), Variable.of("E2")),
-                                        Resolver.of("E2", KThing.class),
-                                        KItem.divisionRightMissing(Resolver.of("E2", Aexp.class))),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(Builtins.is(KResult.class, Resolver.of("R", KThing.class))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Arrays.asList(
-                                                Variable.of("R"),
-                                                Sequence.of(Terminal.of("E1"), Terminal.of("/"), Variable.of("[]"))),
-                                        Aexp.div(Resolver.of("E1", Aexp.class), Resolver.of("R", Aexp.class))),
-                                Anything.of())
-                ),
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Stmt.AssignStmt) {
+                Stmt.AssignStmt assign = (Stmt.AssignStmt) firstKCellItem;
+                if (assign.getAexp() instanceof Aexp.IntAexp) {
+                    Map<KThing, KThing> newMap = new HashMap<>(stateCellMap.getMap());
+                    newMap.put(assign.getId(), assign.getAexp());
+                    return Optional.of(
+                            configuration
+                                    .replaceKCell(configuration.getK().removePrefix(1))
+                                    .replaceStateCell(
+                                            configuration.getState().replacePrefix(1, new KMap(newMap))));
+                }
+            }
+            return Optional.empty();
+        });
 
-                Rule.of(
-                        RuleCondition.of(BoolNot.of(Builtins.is(KResult.class, Resolver.of("E1", KThing.class)))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Variable.of("E1"), Terminal.of("+"), Variable.of("E2")),
-                                        Resolver.of("E1", KThing.class),
-                                        KItem.additionLeftMissing(Resolver.of("E2", Aexp.class))),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(Builtins.is(KResult.class, Resolver.of("R", KThing.class))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Arrays.asList(
-                                                Variable.of("R"),
-                                                Sequence.of(Terminal.of("[]"), Terminal.of("+"), Variable.of("E2"))),
-                                        Aexp.add(Resolver.of("R", Aexp.class), Resolver.of("E2", Aexp.class))),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(
-                                BoolAnd.of(
-                                        Builtins.is(KResult.class, Resolver.of("E1", KThing.class)),
-                                        BoolNot.of(Builtins.is(KResult.class, Resolver.of("E2", KThing.class))))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Variable.of("E1"), Terminal.of("+"), Variable.of("E2")),
-                                        Resolver.of("E2", KThing.class),
-                                        KItem.additionRightMissing(Resolver.of("E2", Aexp.class))),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(Builtins.is(KResult.class, Resolver.of("R", KThing.class))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Arrays.asList(
-                                                Variable.of("R"),
-                                                Sequence.of(Terminal.of("E1"), Terminal.of("+"), Variable.of("[]"))),
-                                        Aexp.add(Resolver.of("E1", Aexp.class), Resolver.of("R", Aexp.class))),
-                                Anything.of())
-                ),
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Stmt.IfStmt) {
+                Stmt.IfStmt ifStmt = (Stmt.IfStmt) firstKCellItem;
+                if (ifStmt.getCondition() instanceof Bexp.BoolBexp) {
+                    Bexp.BoolBexp condition = (Bexp.BoolBexp) ifStmt.getCondition();
+                    if (condition.getBool().getValue()) {
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(1, ifStmt.getIthen())));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Stmt.IfStmt) {
+                Stmt.IfStmt ifStmt = (Stmt.IfStmt) firstKCellItem;
+                if (ifStmt.getCondition() instanceof Bexp.BoolBexp) {
+                    Bexp.BoolBexp condition = (Bexp.BoolBexp) ifStmt.getCondition();
+                    if (!condition.getBool().getValue()) {
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(1, ifStmt.getIelse())));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Pgm) {
+                Pgm pgm = (Pgm) firstKCellItem;
+                if (pgm.getIds() instanceof Ids.NonEmpty) {
+                    Ids.NonEmpty ids = (Ids.NonEmpty) pgm.getIds();
+                    Map<KThing, KThing> newMap = new HashMap<>(stateCellMap.getMap());
+                    newMap.put(ids.getId(), Aexp.aint(Int.of(0)));
+                    return Optional.of(
+                            configuration
+                                    .replaceKCell(configuration.getK().replacePrefix(
+                                            1, Pgm.of(ids.getTail(), pgm.getStmt())))
+                                    .replaceStateCell(configuration.getState().replacePrefix(
+                                            1, new KMap(newMap))));
+                }
+            }
+            return Optional.empty();
+        });
 
-                Rule.of(
-                        RuleCondition.of(BoolNot.of(Builtins.is(KResult.class, Resolver.of("E1", KThing.class)))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Variable.of("E1"), Terminal.of("<="), Variable.of("E2")),
-                                        Resolver.of("E1", KThing.class),
-                                        KItem.lessOrEqualsLeftMissing(Resolver.of("E2", Aexp.class))),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(Builtins.is(KResult.class, Resolver.of("R", KThing.class))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Arrays.asList(
-                                                Variable.of("R"),
-                                                Sequence.of(Terminal.of("[]"), Terminal.of("<="), Variable.of("E2"))),
-                                        Bexp.less(Resolver.of("R", Aexp.class), Resolver.of("E2", Aexp.class))),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(
-                                BoolAnd.of(
-                                        Builtins.is(KResult.class, Resolver.of("E1", KThing.class)),
-                                        BoolNot.of(Builtins.is(KResult.class, Resolver.of("E2", KThing.class))))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Variable.of("E1"), Terminal.of("<="), Variable.of("E2")),
-                                        Resolver.of("E2", KThing.class),
-                                        KItem.lessOrEqualsRightMissing(Resolver.of("E2", Aexp.class))),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(Builtins.is(KResult.class, Resolver.of("R", KThing.class))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Arrays.asList(
-                                                Variable.of("R"),
-                                                Sequence.of(Terminal.of("E1"), Terminal.of("<="), Variable.of("[]"))),
-                                        Bexp.less(Resolver.of("E1", Aexp.class), Resolver.of("R", Aexp.class))),
-                                Anything.of())
-                ),
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.DivAexp) {
+                Aexp.DivAexp div = (Aexp.DivAexp) firstKCellItem;
+                if (!(div.getFirst() instanceof Aexp.IntAexp)) {
+                    return Optional.of(configuration.replaceKCell(
+                            configuration.getK().replacePrefix(
+                                    1, div.getFirst(), KItem.divisionLeftMissing(div.getSecond()))));
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.IntAexp) {
+                if (secondKCellItem.isPresent()) {
+                    if (secondKCellItem.get() instanceof KItem.DivisionLeftMissing) {
+                        KItem.DivisionLeftMissing div = (KItem.DivisionLeftMissing) secondKCellItem.get();
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(
+                                        2, Aexp.div((Aexp) firstKCellItem, div.getRight()))));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.DivAexp) {
+                Aexp.DivAexp div = (Aexp.DivAexp) firstKCellItem;
+                if ((div.getFirst() instanceof Aexp.IntAexp) && !(div.getSecond() instanceof Aexp.IntAexp)) {
+                    return Optional.of(configuration.replaceKCell(
+                            configuration.getK().replacePrefix(
+                                    1, div.getSecond(), KItem.divisionRightMissing(div.getFirst()))));
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.IntAexp) {
+                if (secondKCellItem.isPresent()) {
+                    if (secondKCellItem.get() instanceof KItem.DivisionRightMissing) {
+                        KItem.DivisionRightMissing div = (KItem.DivisionRightMissing) secondKCellItem.get();
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(
+                                        2, Aexp.div(div.getLeft(), (Aexp) firstKCellItem))));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
 
-                Rule.of(
-                        RuleCondition.of(
-                                BoolNot.of(Builtins.is(KResult.class, Resolver.of("E", KThing.class)))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Terminal.of("!"), Variable.of("E")),
-                                        Resolver.of("E", KThing.class),
-                                        KItem.notMissingOperand()),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(Builtins.is(KResult.class, Resolver.of("R", KThing.class))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Arrays.asList(
-                                                Variable.of("R"),
-                                                Sequence.of(Terminal.of("!"), Variable.of("[]"))),
-                                        Bexp.not(Resolver.of("R", Bexp.class))),
-                                Anything.of())
-                ),
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.AddAexp) {
+                Aexp.AddAexp add = (Aexp.AddAexp) firstKCellItem;
+                if (!(add.getFirst() instanceof Aexp.IntAexp)) {
+                    return Optional.of(configuration.replaceKCell(
+                            configuration.getK().replacePrefix(
+                                    1, add.getFirst(), KItem.additionLeftMissing(add.getSecond()))));
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.IntAexp) {
+                if (secondKCellItem.isPresent()) {
+                    if (secondKCellItem.get() instanceof KItem.AdditionLeftMissing) {
+                        KItem.AdditionLeftMissing add = (KItem.AdditionLeftMissing) secondKCellItem.get();
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(
+                                        2, Aexp.add((Aexp) firstKCellItem, add.getRight()))));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.AddAexp) {
+                Aexp.AddAexp add = (Aexp.AddAexp) firstKCellItem;
+                if ((add.getFirst() instanceof Aexp.IntAexp) && !(add.getSecond() instanceof Aexp.IntAexp)) {
+                    return Optional.of(configuration.replaceKCell(
+                            configuration.getK().replacePrefix(
+                                    1, add.getSecond(), KItem.additionRightMissing(add.getFirst()))));
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.IntAexp) {
+                if (secondKCellItem.isPresent()) {
+                    if (secondKCellItem.get() instanceof KItem.AdditionRightMissing) {
+                        KItem.AdditionRightMissing add = (KItem.AdditionRightMissing) secondKCellItem.get();
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(
+                                        2, Aexp.add(add.getLeft(), (Aexp) firstKCellItem))));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
 
-                Rule.of(
-                        RuleCondition.of(
-                                BoolNot.of(Builtins.is(KResult.class, Resolver.of("E", KThing.class)))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(Variable.of("Id"), Terminal.of("="), Variable.of("E"), Terminal.of(";")),
-                                        Resolver.of("E", KThing.class),
-                                        KItem.assignmentMissingOperand(Resolver.of("Id", KThing.class))),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(Builtins.is(KResult.class, Resolver.of("R", KThing.class))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Arrays.asList(
-                                                Variable.of("R"),
-                                                Sequence.of(Terminal.of("!"), Variable.of("[]"))),
-                                        Bexp.not(Resolver.of("R", Bexp.class))),
-                                Anything.of())
-                ),
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Bexp.LessBexp) {
+                Bexp.LessBexp less = (Bexp.LessBexp) firstKCellItem;
+                if (!(less.getFirst() instanceof Aexp.IntAexp)) {
+                    return Optional.of(configuration.replaceKCell(
+                            configuration.getK().replacePrefix(
+                                    1, less.getFirst(), KItem.lessOrEqualsLeftMissing(less.getSecond()))));
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.IntAexp) {
+                if (secondKCellItem.isPresent()) {
+                    if (secondKCellItem.get() instanceof KItem.LessOrEqualsLeftMissing) {
+                        KItem.LessOrEqualsLeftMissing less = (KItem.LessOrEqualsLeftMissing) secondKCellItem.get();
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(
+                                        2, Bexp.less((Aexp) firstKCellItem, less.getRight()))));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Bexp.LessBexp) {
+                Bexp.LessBexp less = (Bexp.LessBexp) firstKCellItem;
+                if ((less.getFirst() instanceof Aexp.IntAexp) && !(less.getSecond() instanceof Aexp.IntAexp)) {
+                    return Optional.of(configuration.replaceKCell(
+                            configuration.getK().replacePrefix(
+                                    1, less.getSecond(), KItem.lessOrEqualsRightMissing(less.getFirst()))));
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.IntAexp) {
+                if (secondKCellItem.isPresent()) {
+                    if (secondKCellItem.get() instanceof KItem.LessOrEqualsRightMissing) {
+                        KItem.LessOrEqualsRightMissing less = (KItem.LessOrEqualsRightMissing) secondKCellItem.get();
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(
+                                        2, Bexp.less(less.getLeft(), (Aexp) firstKCellItem))));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
 
-                Rule.of(
-                        RuleCondition.of(
-                                BoolNot.of(Builtins.is(KResult.class, Resolver.of("C", KThing.class)))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(
-                                                Terminal.of("if"), Terminal.of("("), Variable.of("C"), Terminal.of(")"),
-                                                Variable.of("T"), Terminal.of("else"), Variable.of("E"),
-                                                Terminal.of(";")),
-                                        Resolver.of("E", KThing.class),
-                                        KItem.ifMissingCondition(
-                                                Resolver.of("T", KThing.class),
-                                                Resolver.of("E", KThing.class))),
-                                Anything.of())
-                ),
-                Rule.of(
-                        RuleCondition.of(Builtins.is(KResult.class, Resolver.of("R", KThing.class))),
-                        RuleCell.of(
-                                "k",
-                                Transform.of(
-                                        Sequence.of(
-                                                Terminal.of("if"), Terminal.of("("), Terminal.of("[]"), Terminal.of(")"),
-                                                Variable.of("T"), Terminal.of("else"), Variable.of("E"),
-                                                Terminal.of(";")),
-                                        Bexp.not(Resolver.of("R", Bexp.class))),
-                                Anything.of())
-                ));
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Bexp.NotBexp) {
+                Bexp.NotBexp not = (Bexp.NotBexp) firstKCellItem;
+                if (!(not.getOperand() instanceof Bexp.BoolBexp)) {
+                    return Optional.of(configuration.replaceKCell(
+                            configuration.getK().replacePrefix(
+                                    1, not.getOperand(), KItem.notMissingOperand())));
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Bexp.BoolBexp) {
+                if (secondKCellItem.isPresent()) {
+                    if (secondKCellItem.get() instanceof KItem.NotMissingOperand) {
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(
+                                        2, Bexp.not((Bexp) firstKCellItem))));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
+
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Stmt.AssignStmt) {
+                Stmt.AssignStmt assign = (Stmt.AssignStmt) firstKCellItem;
+                if (!(assign.getAexp() instanceof Aexp.IntAexp)) {
+                    return Optional.of(configuration.replaceKCell(
+                            configuration.getK().replacePrefix(
+                                    1, assign.getAexp(), KItem.assignmentMissingOperand(assign.getId()))));
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Aexp.IntAexp) {
+                if (secondKCellItem.isPresent()) {
+                    if (secondKCellItem.get() instanceof KItem.AssignmentMissingOperand) {
+                        KItem.AssignmentMissingOperand assignment =
+                                (KItem.AssignmentMissingOperand) secondKCellItem.get();
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(
+                                        2, Stmt.assign(assignment.getId(), (Aexp) firstKCellItem))));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
+
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Stmt.IfStmt) {
+                Stmt.IfStmt sif = (Stmt.IfStmt) firstKCellItem;
+                if (!(sif.getCondition() instanceof Bexp.BoolBexp)) {
+                    return Optional.of(configuration.replaceKCell(
+                            configuration.getK().replacePrefix(
+                                    1,
+                                    sif.getCondition(),
+                                    KItem.ifMissingCondition(sif.getIthen(), sif.getIelse()))));
+                }
+            }
+            return Optional.empty();
+        });
+        rules.add((configuration, firstKCellItem, secondKCellItem, stateCellMap) -> {
+            if (firstKCellItem instanceof Bexp.BoolBexp) {
+                if (secondKCellItem.isPresent()) {
+                    if (secondKCellItem.get() instanceof KItem.IfMissingCondition) {
+                        KItem.IfMissingCondition sif = (KItem.IfMissingCondition) secondKCellItem.get();
+                        return Optional.of(configuration.replaceKCell(
+                                configuration.getK().replacePrefix(
+                                        2, Stmt.sif((Bexp) firstKCellItem, sif.getIthen(), sif.getIelse()))));
+                    }
+                }
+            }
+            return Optional.empty();
+        });
+        return rules;
     }
 
-    private static KThing loadProgram(String[] args) {
+    private static KThing loadProgram() {
         /*
             int n, sum,
             n = 100,

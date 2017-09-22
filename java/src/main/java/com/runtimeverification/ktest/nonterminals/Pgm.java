@@ -2,7 +2,7 @@ package com.runtimeverification.ktest.nonterminals;
 
 import com.runtimeverification.ktest.KThing;
 
-public class Pgm implements KThing<Pgm> {
+public class Pgm implements KThing {
     private final Ids ids;
     private final Stmt stmt;
 
@@ -15,8 +15,16 @@ public class Pgm implements KThing<Pgm> {
         return new Pgm(ids, stmt);
     }
 
+    public Ids getIds() {
+        return ids;
+    }
+
+    public Stmt getStmt() {
+        return stmt;
+    }
+
     @Override
-    public Pgm get() {
-        return this;
+    public String toString() {
+        return this.getClass().getSimpleName() + "(" + ids + ", " + stmt + ")";
     }
 }

@@ -1,6 +1,7 @@
 package com.runtimeverification.ktest;
 
 import com.runtimeverification.ktest.configuration.Cell;
+import com.runtimeverification.ktest.tools.KMap;
 
 import java.util.Optional;
 
@@ -9,8 +10,8 @@ class Configuration {
     private final Cell state;
 
     public Configuration() {
-        this.k = new Cell("k");
-        this.state = new Cell("state");
+        this.k = Cell.of("k", new KMap());
+        this.state = Cell.of("state", new KMap());
     }
 
     private Configuration(Cell k, Cell state) {
@@ -32,6 +33,11 @@ class Configuration {
 
     public Cell getState() {
         return state;
+    }
+
+    @Override
+    public String toString() {
+        return this.getClass().getSimpleName() + "(\n  " + k + ",\n  " + state + ")";
     }
 }
 

@@ -2,25 +2,25 @@ package com.runtimeverification.ktest.nonterminals;
 
 import com.runtimeverification.ktest.KThing;
 
-public class KItem implements KThing<KItem> {
-    public static AdditionRightMissing divisionLeftMissing(KThingSource<Aexp> right) {
-        return new AdditionRightMissing(right);
+public class KItem implements KThing {
+    public static DivisionLeftMissing divisionLeftMissing(Aexp right) {
+        return new DivisionLeftMissing(right);
     }
-    public static DivisionRightMissing divisionRightMissing(KThingSource<Aexp> left) {
+    public static DivisionRightMissing divisionRightMissing(Aexp left) {
         return new DivisionRightMissing(left);
     }
 
-    public static AdditionLeftMissing additionLeftMissing(KThingSource<Aexp> right) {
+    public static AdditionLeftMissing additionLeftMissing(Aexp right) {
         return new AdditionLeftMissing(right);
     }
-    public static AdditionRightMissing additionRightMissing(KThingSource<Aexp> left) {
+    public static AdditionRightMissing additionRightMissing(Aexp left) {
         return new AdditionRightMissing(left);
     }
 
-    public static LessOrEqualsLeftMissing lessOrEqualsLeftMissing(KThingSource<Aexp> right) {
+    public static LessOrEqualsLeftMissing lessOrEqualsLeftMissing(Aexp right) {
         return new LessOrEqualsLeftMissing(right);
     }
-    public static LessOrEqualsRightMissing lessOrEqualsRightMissing(KThingSource<Aexp> left) {
+    public static LessOrEqualsRightMissing lessOrEqualsRightMissing(Aexp left) {
         return new LessOrEqualsRightMissing(left);
     }
 
@@ -28,94 +28,180 @@ public class KItem implements KThing<KItem> {
         return new NotMissingOperand();
     }
 
-    public static AndLeftMissing andLeftMissing(KThingSource<Bexp> right) {
+    public static AndLeftMissing andLeftMissing(Bexp right) {
         return new AndLeftMissing(right);
     }
 
-    public static AssignmentMissingOperand assignmentMissingOperand(KThingSource<KThing> left) {
+    public static AssignmentMissingOperand assignmentMissingOperand(Id left) {
         return new AssignmentMissingOperand(left);
     }
 
-    public static IfMissingCondition ifMissingCondition(KThingSource<KThing> ithen, KThingSource<KThing> ielse) {
+    public static IfMissingCondition ifMissingCondition(Block ithen, Block ielse) {
         return new IfMissingCondition(ithen, ielse);
     }
 
-    private static class DivisionLeftMissing extends KItem {
-        private final KThingSource<Aexp> right;
+    public static class DivisionLeftMissing extends KItem {
+        private final Aexp right;
 
-        private DivisionLeftMissing(KThingSource<Aexp> right) {
+        private DivisionLeftMissing(Aexp right) {
             this.right = right;
         }
-    }
 
-    private static class DivisionRightMissing extends KItem {
-        private final KThingSource<Aexp> left;
+        public Aexp getRight() {
+            return right;
+        }
 
-        private DivisionRightMissing(KThingSource<Aexp> left) {
-            this.left = left;
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + "(" + right + ")";
         }
     }
 
-    private static class AdditionLeftMissing extends KItem {
-        private final KThingSource<Aexp> right;
+    public static class DivisionRightMissing extends KItem {
+        private final Aexp left;
 
-        private AdditionLeftMissing(KThingSource<Aexp> right) {
+        private DivisionRightMissing(Aexp left) {
+            this.left = left;
+        }
+
+        public Aexp getLeft() {
+            return left;
+        }
+
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + "(" + left + ")";
+        }
+    }
+
+    public static class AdditionLeftMissing extends KItem {
+        private final Aexp right;
+
+        private AdditionLeftMissing(Aexp right) {
             this.right = right;
         }
-    }
 
-    private static class AdditionRightMissing extends KItem {
-        private final KThingSource<Aexp> left;
+        public Aexp getRight() {
+            return right;
+        }
 
-        private AdditionRightMissing(KThingSource<Aexp> left) {
-            this.left = left;
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + "(" + right + ")";
         }
     }
 
-    private static class LessOrEqualsLeftMissing extends KItem {
-        private final KThingSource<Aexp> right;
+    public static class AdditionRightMissing extends KItem {
+        private final Aexp left;
 
-        private LessOrEqualsLeftMissing(KThingSource<Aexp> right) {
+        private AdditionRightMissing(Aexp left) {
+            this.left = left;
+        }
+
+        public Aexp getLeft() {
+            return left;
+        }
+
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + "(" + left + ")";
+        }
+    }
+
+    public static class LessOrEqualsLeftMissing extends KItem {
+        private final Aexp right;
+
+        private LessOrEqualsLeftMissing(Aexp right) {
             this.right = right;
         }
-    }
 
-    private static class LessOrEqualsRightMissing extends KItem {
-        private final KThingSource<Aexp> left;
+        public Aexp getRight() {
+            return right;
+        }
 
-        private LessOrEqualsRightMissing(KThingSource<Aexp> left) {
-            this.left = left;
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + "(" + right + ")";
         }
     }
 
-    private static class NotMissingOperand extends KItem {
+    public static class LessOrEqualsRightMissing extends KItem {
+        private final Aexp left;
+
+        private LessOrEqualsRightMissing(Aexp left) {
+            this.left = left;
+        }
+
+        public Aexp getLeft() {
+            return left;
+        }
+
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + "(" + left + ")";
+        }
+    }
+
+    public static class NotMissingOperand extends KItem {
         private NotMissingOperand() {
         }
+
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + "()";
+        }
     }
 
-    private static class AndLeftMissing extends KItem {
-        private final KThingSource<Bexp> right;
+    public static class AndLeftMissing extends KItem {
+        private final Bexp right;
 
-        private AndLeftMissing(KThingSource<Bexp> right) {
+        private AndLeftMissing(Bexp right) {
             this.right = right;
         }
-    }
 
-    private static class AssignmentMissingOperand extends KItem {
-        private final KThingSource<KThing> left;
-
-        private AssignmentMissingOperand(KThingSource<KThing> left) {
-            this.left = left;
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + "(" + right + ")";
         }
     }
 
-    private static class IfMissingCondition extends KItem {
-        private final KThingSource<KThing> ithen;
-        private final KThingSource<KThing> ielse;
+    public static class AssignmentMissingOperand extends KItem {
+        private final Id id;
 
-        private IfMissingCondition(KThingSource<KThing> ithen, KThingSource<KThing> ielse) {
+        private AssignmentMissingOperand(Id id) {
+            this.id = id;
+        }
+
+        public Id getId() {
+            return id;
+        }
+
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + "(" + id + ")";
+        }
+    }
+
+    public static class IfMissingCondition extends KItem {
+        private final Block ithen;
+        private final Block ielse;
+
+        private IfMissingCondition(Block ithen, Block ielse) {
             this.ithen = ithen;
             this.ielse = ielse;
+        }
+
+        public Block getIthen() {
+            return ithen;
+        }
+
+        public Block getIelse() {
+            return ielse;
+        }
+
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + "(" + ithen + ", " + ielse + ")";
         }
     }
 }

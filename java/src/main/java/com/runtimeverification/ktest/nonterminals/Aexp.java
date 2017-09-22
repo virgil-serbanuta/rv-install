@@ -36,6 +36,11 @@ public abstract class Aexp implements KThing {
         public Aexp getSecond() {
             return second;
         }
+
+        @Override
+        public String toString() {
+            return "AddAexp(" + first.toString() + ", " + second.toString() + ")";
+        }
     }
 
     public static class DivAexp extends Aexp {
@@ -54,6 +59,11 @@ public abstract class Aexp implements KThing {
         public Aexp getSecond() {
             return second;
         }
+
+        @Override
+        public String toString() {
+            return "DivAexp(" + first.toString() + ", " + second.toString() + ")";
+        }
     }
 
     public static class IdAexp extends Aexp {
@@ -61,6 +71,15 @@ public abstract class Aexp implements KThing {
 
         private IdAexp(Id id) {
             this.id = id;
+        }
+
+        @Override
+        public String toString() {
+            return "IdAexp(" + id.toString() + ")";
+        }
+
+        public Id getId() {
+            return id;
         }
     }
 
@@ -73,6 +92,11 @@ public abstract class Aexp implements KThing {
 
         public Int getInt() {
             return value;
+        }
+
+        @Override
+        public String toString() {
+            return "IntAexp(" + value.toString() + ")";
         }
     }
 }
