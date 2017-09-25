@@ -27,6 +27,9 @@ public class Main {
                 .replaceKCell(Cell.of("k", pgm, Attribute.of("color", "green")))
                 .replaceStateCell(Cell.of("state", new KMap(), Attribute.of("color", "red")));
         List<Rule> rules = loadRules();
+        for (int i = 0; i < 10000; i++) {
+            run(initialConfiguration, rules);
+        }
         System.out.println(run(initialConfiguration, rules));
     }
 
