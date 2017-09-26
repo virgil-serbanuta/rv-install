@@ -118,7 +118,6 @@ public class Main {
                 new Pair<>(
                         Arrays.asList(
                                 ruleIndexes.ifResolveTrue,
-                                ruleIndexes.blockToStatement,
                                 ruleIndexes.sequenceResolve,
                                 ruleIndexes.sequenceResolve,
                                 ruleIndexes.assignmentUnpacking,
@@ -219,7 +218,7 @@ public class Main {
                                 1,
                                 Stmt.sif(
                                         firstKCellItem.child1,
-                                        Block.stmt(Stmt.sequence(firstKCellItem.child2.child1, firstKCellItem)),
+                                        Stmt.sequence(firstKCellItem.child2.child1, firstKCellItem),
                                         Block.empty()));
                 return true;
             }
